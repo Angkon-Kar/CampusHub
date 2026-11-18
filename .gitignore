@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment Variables (NEVER PUSH THESE)
+.env
+.enve.*
+.env.local
+!.env.example
+.env.production
+client/.env
+server/.env
+
+# Build outputs
+client/dist/
+dist/
+
+# Logs & OS files
+npm-debug.log*
+.DS_Store
+*.log
+
+
+serviceAccountKey.json
+server/serviceAccountKey.json
