@@ -2,7 +2,7 @@
 // A live preview of a PDF's first page, drawn on a canvas (no image files). It starts drawing when it scrolls into view.
 import { useState, useEffect, useRef } from 'react';
 import { FileX2 } from 'lucide-react';
-import { renderPdfFirstPage } from '../../lib/pdfpreview.js';
+import { renderPdfFirstPage } from '../../lib/pdfPreview.js';
 
 export const PdfThumb = ({ url, missing = false, label, blurred = false }) => {
   const wrapRef = useRef(null);
