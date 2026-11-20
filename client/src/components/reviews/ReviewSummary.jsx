@@ -30,7 +30,7 @@ export const ReviewSummary = ({ summary, activeRating, onSelectRating }) => {
               onClick={() => onSelectRating(active ? 0 : stars)}
               aria-pressed={active}
               aria-label={`${stars} star reviews: ${count}`}
-              className={`w-full flex items-center gap-3 px-2 py-1 rounded-lg text-sm transition cursor-pointer ${active ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+              className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition cursor-pointer ${active ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
             >
               <span className="w-10 text-left font-medium text-slate-600">{stars} ★</span>
               <span className="flex-1 h-2.5 rounded-full bg-slate-200/80 overflow-hidden">
