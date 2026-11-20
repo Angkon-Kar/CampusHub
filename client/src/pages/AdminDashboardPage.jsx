@@ -37,6 +37,7 @@ import { useAuth } from '../hooks/useAuth';
 import { apiRequest } from '../utils/apiClient';
 import { Modal } from '../components/Modal';
 import { Bone, DashboardSkeleton } from '../components/Skeletons';
+import { scrollBehavior } from '../utils/scrollToTop';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewQueue } from '../components/ReviewQueue';
 import { COLLEGE_FILTER_OPTIONS } from '../constants/campus';
@@ -143,7 +144,7 @@ const ReviewModal = ({ post, onClose, onReview }) => {
     <Modal isOpen onClose={onClose} title="Review post" size="md">
       <div className="space-y-5">
         <div>
-          <p className="font-semibold text-slate-900">{post.title}</p>
+          <p className="font-semibold text-slate-900 break-words">{post.title}</p>
           <p className="text-sm text-slate-500 mt-0.5">
             by @{post.author?.username} &middot; {post.college} &middot; {post.department}
           </p>
@@ -215,7 +216,7 @@ const QueueMobileCard = ({ post, onApprove, onReview, onDelete }) => {
   return (
     <div className="p-4 space-y-3">
       <div>
-        <p className="font-medium text-slate-900">{title}</p>
+        <p className="font-medium text-slate-900 break-words">{title}</p>
         <p className="text-xs text-slate-500 mt-1">
           <span className="capitalize">{type}</span> &middot; {college} &middot; {department} &middot;{' '}
           {new Date(createdAt).toLocaleDateString()}
@@ -243,14 +244,14 @@ const QueueMobileCard = ({ post, onApprove, onReview, onDelete }) => {
         </a>
         <div className="flex gap-1.5">
           {status !== 'approved' && (
-            <button type="button" onClick={onApprove} className="p-2 rounded-lg text-emerald-600 bg-emerald-50 cursor-pointer" aria-label="Approve">
+            <button type="button" onClick={onApprove} className="p-2.5 rounded-lg text-emerald-600 bg-emerald-50 cursor-pointer" aria-label="Approve">
               <Check size={16} />
             </button>
           )}
-          <button type="button" onClick={onReview} className="p-2 rounded-lg text-slate-600 bg-slate-100 cursor-pointer" aria-label="Review">
+          <button type="button" onClick={onReview} className="p-2.5 rounded-lg text-slate-600 bg-slate-100 cursor-pointer" aria-label="Review">
             <MessageSquare size={16} />
           </button>
-          <button type="button" onClick={onDelete} className="p-2 rounded-lg text-rose-500 bg-rose-50 cursor-pointer" aria-label="Delete">
+          <button type="button" onClick={onDelete} className="p-2.5 rounded-lg text-rose-500 bg-rose-50 cursor-pointer" aria-label="Delete">
             <Trash2 size={16} />
           </button>
         </div>
@@ -464,18 +465,22 @@ export const AdminDashboardPage = () => {
   const chartTooltipStyle = { borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(15,23,42,0.08)' };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid lg:grid-cols-[230px_minmax(0,1fr)] gap-6 lg:gap-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[230px_minmax(0,1fr)] gap-4 lg:gap-8">
       {/* Sidebar */}
-      <aside className="lg:sticky lg:top-24 lg:self-start">
-        <div className="card p-3">
-          <p className="px-3 pt-2 pb-3 text-sm font-semibold text-slate-900">Admin panel</p>
-          <nav className="flex lg:flex-col gap-1 overflow-x-auto">
+      <aside className="min-w-0 sticky top-[4.25rem] z-30 lg:top-24 lg:self-start">
+        <div className="card p-1.5 lg:p-3 bg-white/95 backdrop-blur">
+          <p className="hidden lg:block px-3 pt-2 pb-3 text-sm font-semibold text-slate-900">Admin panel</p>
+          <nav className="flex lg:flex-col gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Admin sections">
             {SECTIONS.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveSection(id)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+                onClick={(e) => {
+                  setActiveSection(id);
+                  // On phones, bring the chosen tab into view in the scrolling menu
+                  e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: scrollBehavior() });
+                }}
+                className={`flex shrink-0 items-center gap-2 lg:gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition cursor-pointer ${
                   activeSection === id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -493,7 +498,7 @@ export const AdminDashboardPage = () => {
               </button>
             ))}
           </nav>
-          <p className="px-3 py-3 mt-2 border-t border-slate-100 text-xs text-slate-400">
+          <p className="hidden lg:block px-3 py-3 mt-2 border-t border-slate-100 text-xs text-slate-400">
             Signed in as {dbUser.role}
           </p>
         </div>
@@ -503,13 +508,13 @@ export const AdminDashboardPage = () => {
       <div className="space-y-6 min-w-0">
         {/* Filters */}
         <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 self-start">
+          <div className="flex w-full md:w-auto p-1 rounded-xl bg-slate-100 md:self-start">
             {TIMEFRAMES.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setTimeframe(id)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
+                className={`flex-1 md:flex-none px-4 py-2 md:py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
                   timeframe === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -526,14 +531,14 @@ export const AdminDashboardPage = () => {
                 </option>
               ))}
             </select>
-            <div className="relative">
+            <div className="relative sm:w-72">
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search title, department or college"
-                className="input !py-2 !pl-10 sm:w-72"
+                className="input !py-2 !pl-10"
               />
             </div>
           </div>
@@ -557,11 +562,11 @@ export const AdminDashboardPage = () => {
               <section className="card p-6">
                 <h2 className="text-base font-bold text-slate-900">Uploads over time</h2>
                 <p className="text-sm text-slate-500 mb-4">Uploads, approvals and declines in the selected period.</p>
-                <div className="h-72">
+                <div className="h-64 sm:h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={timeline} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={18} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
                       <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: '#f1f5f9' }} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -633,7 +638,7 @@ export const AdminDashboardPage = () => {
                       onClick={() => {
                         setQueueTab(id);
                       }}
-                      className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition cursor-pointer ${
+                      className={`px-3.5 py-2 rounded-full text-sm font-medium transition cursor-pointer ${
                         queueTab === id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
@@ -781,7 +786,36 @@ export const AdminDashboardPage = () => {
               {topContributors.length === 0 ? (
                 <div className="py-16 text-center text-sm text-slate-500">No contributors yet.</div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <ol className="md:hidden divide-y divide-slate-100 border-t border-slate-100">
+                  {topContributors.map(({ _id, fullName, username, college: col, department, totalUploads, approvedUploads, totalViews, totalLoves }, index) => (
+                    <li key={_id} className="px-4 py-3.5 flex gap-3">
+                      <span className="w-6 shrink-0 text-center font-bold text-slate-400 pt-0.5">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/${username}`} className="font-medium text-slate-900 hover:text-indigo-600 break-words">
+                          {fullName}
+                        </Link>
+                        <p className="text-xs text-slate-500 break-all">
+                          @{username} &middot; {col} &middot; {department}
+                        </p>
+                        <dl className="mt-2.5 grid grid-cols-4 gap-2 text-center">
+                          {[
+                            ['Uploads', totalUploads, 'text-slate-900'],
+                            ['Approved', approvedUploads, 'text-emerald-600'],
+                            ['Views', totalViews, 'text-slate-900'],
+                            ['Loves', totalLoves, 'text-rose-500'],
+                          ].map(([label, value, color]) => (
+                            <div key={label} className="rounded-lg bg-slate-50 py-1.5">
+                              <dd className={`text-sm font-bold ${color}`}>{formatNumber(value)}</dd>
+                              <dt className="text-[10px] text-slate-400">{label}</dt>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full min-w-[560px] text-sm">
                     <thead>
                       <tr className="text-left text-xs text-slate-500 border-y border-slate-100">
@@ -816,6 +850,7 @@ export const AdminDashboardPage = () => {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </section>
           )}
@@ -829,7 +864,7 @@ export const AdminDashboardPage = () => {
                 {collegeBreakdown.length === 0 ? (
                   <p className="text-sm text-slate-500 py-10 text-center">No data yet.</p>
                 ) : (
-                  <div className="h-72">
+                  <div className="h-64 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={collegeBreakdown} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -847,22 +882,22 @@ export const AdminDashboardPage = () => {
 
               <section className="card overflow-hidden">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
+                <table className="w-full min-w-0 text-sm">
                   <thead>
                     <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                      <th className="px-6 py-3 font-medium">College</th>
+                      <th className="px-3 sm:px-6 py-3 font-medium">College</th>
                       <th className="px-3 py-3 font-medium text-right">Posts</th>
                       <th className="px-3 py-3 font-medium text-right">Views</th>
-                      <th className="px-6 py-3 font-medium text-right">Loves</th>
+                      <th className="px-3 sm:px-6 py-3 font-medium text-right">Loves</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {collegeBreakdown.map(({ college: col, posts: postCount, views, loves }) => (
                       <tr key={col} className="hover:bg-slate-50/60">
-                        <td className="px-6 py-3.5 font-medium text-slate-900">{col}</td>
+                        <td className="px-3 sm:px-6 py-3.5 font-medium text-slate-900">{col}</td>
                         <td className="px-3 py-3.5 text-right">{formatNumber(postCount)}</td>
                         <td className="px-3 py-3.5 text-right">{formatNumber(views)}</td>
-                        <td className="px-6 py-3.5 text-right text-rose-500">{formatNumber(loves)}</td>
+                        <td className="px-3 sm:px-6 py-3.5 text-right text-rose-500">{formatNumber(loves)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -881,10 +916,10 @@ export const AdminDashboardPage = () => {
                 </div>
                 <div className="divide-y divide-slate-100 border-t border-slate-100">
                   {staffMembers.map(({ _id, fullName, username, email, college: col, role }) => (
-                    <div key={_id} className="px-6 py-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
+                    <div key={_id} className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
                         <p className="font-medium text-slate-900">{fullName}</p>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-slate-500 break-all">
                           @{username} &middot; {email} &middot; {col}
                         </p>
                       </div>
