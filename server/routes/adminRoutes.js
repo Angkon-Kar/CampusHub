@@ -9,6 +9,8 @@ import { requireRole } from '../middlewares/roleMiddleware.js';
 import { inspectLink, linkErrorResponse } from '../middlewares/linkValidator.js';
 import { sendServerError } from '../utils/httpError.js';
 import { notifyUser } from '../utils/notify.js';
+import { normalizeLinkKey } from '../utils/linkKey.js';
+import { sendPushToUser } from '../utils/pushService.js';
 
 const router = express.Router();
 
@@ -43,7 +45,7 @@ const safeTimezone = (tz) => {
 // Tell the author what happened to their post (in-app notification)
 const notifyAuthor = async (post, previousStatus, previousComment) => {
   const note = post.adminComment ? ` Moderator note: ${post.adminComment}` : '';
-  const base = { user: post.author, post: post._id, title: post.title };
+  const base = { user: post.author?._id || post.author, post: post._id, title: post.title };
 
   if (post.status === 'approved' && previousStatus !== 'approved') {
     return notifyUser({ ...base, type: 'approved', message: `Your post was approved and is now live.${note}` });
@@ -249,7 +251,7 @@ router.patch('/posts/:id/review', verifyFirebaseToken, requireRole(['admin', 'mo
   }
 
   try {
-    const post = await Post.findById(id);
+    const post = await Post.findById(id).populate('author', 'username');
     if (!post) return res.status(404).json({ message: 'Post not found!' });
 
     const previousStatus = post.status;
@@ -264,6 +266,7 @@ router.patch('/posts/:id/review', verifyFirebaseToken, requireRole(['admin', 'mo
         const meta = await inspectLink(String(updatedLink).trim(), { title: post.title, type: post.type });
         post.externalLink = meta.originalLink;
         post.unmaskedLink = meta.unmaskedLink;
+        post.linkKey = normalizeLinkKey(meta.unmaskedLink || meta.originalLink);
         post.aiSafetyNote = meta.aiSafetyNote;
       } catch (linkError) {
         const { status: code, body } = linkErrorResponse(linkError);
@@ -276,6 +279,21 @@ router.patch('/posts/:id/review', verifyFirebaseToken, requireRole(['admin', 'mo
 
     await post.save();
     await notifyAuthor(post, previousStatus, previousComment);
+
+    // Phone notification for the author (fire and forget: a push problem must never block moderation)
+    if (previousStatus !== status && ['approved', 'declined'].includes(status) && post.author?._id) {
+      const isApproved = status === 'approved';
+      sendPushToUser(post.author._id, {
+        title: isApproved ? 'Your post is live! 🎉' : 'Your post needs changes',
+        body: isApproved
+          ? `"${post.title}" was approved and is now visible to everyone.`
+          : post.adminComment
+          ? `"${post.title}": ${post.adminComment}`
+          : `"${post.title}" was declined. Open your profile to see why.`,
+        url: isApproved ? '/' : `/${post.author.username}?tab=status`,
+        tag: `post-${post._id}`,
+      });
+    }
 
     res.status(200).json({
       success: true,
