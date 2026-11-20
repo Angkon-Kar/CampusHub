@@ -15,7 +15,7 @@ const CourseRow = ({ course, index, onChange, onRemove }) => {
   const setGrade = (value) => onChange({ grade: value, marks: '' });
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_84px_92px_92px_64px_36px] gap-2 items-center py-2.5 border-b border-slate-100 last:border-0">
+    <div className="grid grid-cols-6 sm:grid-cols-[minmax(0,1fr)_84px_92px_92px_64px_36px] gap-2 items-center py-2.5 border-b border-slate-100 last:border-0">
       <input
         type="text"
         value={course.name}
@@ -23,13 +23,13 @@ const CourseRow = ({ course, index, onChange, onRemove }) => {
         placeholder={`Course ${index + 1}`}
         aria-label={`Course ${index + 1} name`}
         maxLength={60}
-        className="input !py-2 col-span-2 sm:col-span-1"
+        className="input !py-2 col-span-4 order-1 sm:col-span-1 sm:order-none"
       />
       <select
         value={course.credit}
         onChange={(e) => onChange({ credit: Number(e.target.value) })}
         aria-label={`Course ${index + 1} credit`}
-        className="input !py-2 cursor-pointer"
+        className="input !py-2 cursor-pointer col-span-2 order-4 sm:col-span-1 sm:order-none"
       >
         {CREDIT_OPTIONS.map((credit) => (
           <option key={credit} value={credit}>
@@ -47,13 +47,13 @@ const CourseRow = ({ course, index, onChange, onRemove }) => {
         onChange={(e) => setMarks(e.target.value)}
         placeholder="Marks"
         aria-label={`Course ${index + 1} marks out of 100`}
-        className="input !py-2"
+        className="input !py-2 col-span-2 order-5 sm:col-span-1 sm:order-none"
       />
       <select
         value={grade ?? ''}
         onChange={(e) => setGrade(e.target.value)}
         aria-label={`Course ${index + 1} grade`}
-        className="input !py-2 cursor-pointer"
+        className="input !py-2 cursor-pointer col-span-2 order-6 sm:col-span-1 sm:order-none"
       >
         <option value="">Grade</option>
         {GRADES.map((item) => (
@@ -62,7 +62,7 @@ const CourseRow = ({ course, index, onChange, onRemove }) => {
           </option>
         ))}
       </select>
-      <div className="text-center">
+      <div className="text-center col-span-1 order-2 sm:order-none">
         {grade ? (
           <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold ${gradeBadge(grade)}`}>{point.toFixed(2)}</span>
         ) : (
@@ -73,7 +73,7 @@ const CourseRow = ({ course, index, onChange, onRemove }) => {
         type="button"
         onClick={onRemove}
         aria-label={`Remove course ${index + 1}`}
-        className="justify-self-end p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+        className="col-span-1 order-3 sm:order-none justify-self-end p-2.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
       >
         <Trash2 size={16} />
       </button>
