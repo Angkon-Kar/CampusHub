@@ -354,7 +354,7 @@ export const PublicProfilePage = () => {
               return (
                 <div
                   key={_id}
-                  className="p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+                  className="p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4"
                 >
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex items-center gap-2">
@@ -363,12 +363,12 @@ export const PublicProfilePage = () => {
                     </div>
                     <p className="text-xs text-slate-500">Submitted on {new Date(createdAt).toLocaleDateString()}</p>
                     {adminComment && (
-                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg mt-2">
+                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg mt-2 break-words">
                         <span className="font-semibold">Moderator feedback:</span> {adminComment}
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col items-start md:items-end gap-2.5 shrink-0">
+                  <div className="flex flex-col items-start md:items-end gap-2.5 md:shrink-0">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${style}`}>
                       <Icon size={14} /> {label}
                     </span>
