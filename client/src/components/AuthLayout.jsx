@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { BookOpen, FolderGit2, ShieldCheck, Award, Star } from 'lucide-react';
+import { Seo } from './Seo';
 
 const HIGHLIGHTS = [
   { Icon: BookOpen, title: 'Every resource in one place', text: 'Suggestions, previous questions and slides from six colleges.' },
@@ -18,8 +19,7 @@ const REVIEWS = [
   { name: "Tanvir Hasan", username: "@tanvir_h", text: "Love the UI and the achievement badges. Keeps me motivated to contribute.", rating: 5 }
 ];
 
-// ২. Dynamic Time-based Greeting Logic
-// Calculated once when the page opens (a state initializer), so no setState is needed inside an effect
+// Dynamic Time-based Greeting Logic
 const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour >= 0 && hour < 5) return "Late night study session? 🦉";
@@ -33,15 +33,13 @@ const getGreeting = () => {
 export const AuthLayout = ({ title, subtitle, children, footer }) => {
   const [greeting] = useState(getGreeting);
 
-  // ৩. 3D Mouse Tracking (Parallax) Setup
+  // 3D Mouse Tracking (Parallax) Setup
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
-  // স্মুথ ট্রানজিশনের জন্য useSpring
   const smoothX = useSpring(mouseX, { damping: 50, stiffness: 300 });
   const smoothY = useSpring(mouseY, { damping: 50, stiffness: 300 });
 
-  // ব্যাকগ্রাউন্ড গ্রিড এবং গ্লো-এর জন্য বিপরীত দিকের মুভমেন্ট (Parallax offsets)
   const bgParallaxX = useTransform(smoothX, [0, typeof window !== 'undefined' ? window.innerWidth : 1200], [15, -15]);
   const bgParallaxY = useTransform(smoothY, [0, typeof window !== 'undefined' ? window.innerHeight : 800], [15, -15]);
   
@@ -55,6 +53,8 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
 
   return (
     <>
+      <Seo title={title} description={subtitle} noIndex />
+
       <style>
         {`
           @keyframes marquee-scroll {
@@ -85,7 +85,7 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
             className="absolute inset-[-50px] z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"
           />
 
-          {/* ১ & ৩. Top Left Glow (Floating + Parallax) */}
+          {/* Top Left Glow (Floating + Parallax) */}
           <motion.div style={{ x: glowParallaxX, y: glowParallaxY }} className="absolute -top-24 -left-24 z-0">
             <motion.div 
               animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
@@ -94,7 +94,7 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
             />
           </motion.div>
 
-          {/* ১ & ৩. Bottom Right Glow (Floating + Parallax) */}
+          {/* Bottom Right Glow (Floating + Parallax) */}
           <motion.div style={{ x: glowParallaxX, y: glowParallaxY }} className="absolute -bottom-32 -right-24 z-0">
             <motion.div 
               animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.7, 0.4] }}
@@ -139,7 +139,7 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
             </motion.ul>
           </div>
 
-          {/* Bottom Real Review Marquee Carousel */}
+          {/* Bottom Review Marquee Carousel */}
           <div className="relative z-10 pb-8 pt-6 w-full border-t border-slate-200/50 bg-white/40 backdrop-blur-md">
             <p className="text-xs font-medium text-slate-500 px-12 xl:px-16 mb-4">
               Trusted by students across all campuses:
