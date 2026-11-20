@@ -100,7 +100,7 @@ export const ReviewQueue = ({ onChanged }) => {
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium capitalize transition cursor-pointer ${tab === id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`px-3.5 py-2 rounded-full text-sm font-medium capitalize transition cursor-pointer ${tab === id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
               {id} ({state.counts[id] ?? 0})
             </button>
