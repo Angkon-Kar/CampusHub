@@ -21,7 +21,7 @@ export const StarInput = ({ value, onChange }) => {
   return (
     <fieldset>
       <legend className="text-sm font-medium text-slate-700 mb-2">Your rating</legend>
-      <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1" onMouseLeave={() => setHover(0)}>
         {[1, 2, 3, 4, 5].map((n) => (
           <label key={n} className="cursor-pointer" onMouseEnter={() => setHover(n)}>
             <input type="radio" name="review-rating" value={n} checked={value === n} onChange={() => onChange(n)} className="peer sr-only" />
@@ -31,7 +31,7 @@ export const StarInput = ({ value, onChange }) => {
             </span>
           </label>
         ))}
-        <span className="ml-2 text-sm font-medium text-slate-500 min-w-20">{shown ? LABELS[shown - 1] : 'Choose stars'}</span>
+        <span className="w-full sm:w-auto sm:ml-2 text-sm font-medium text-slate-500 sm:min-w-24">{shown ? LABELS[shown - 1] : 'Choose stars'}</span>
       </div>
     </fieldset>
   );
