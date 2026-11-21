@@ -31,6 +31,7 @@ import {
   Link2Off,
   RefreshCw,
   Star,
+  Tags,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
@@ -41,6 +42,7 @@ import { Bone, DashboardSkeleton } from '../components/Skeletons';
 import { scrollBehavior } from '../utils/scrollToTop';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewQueue } from '../components/ReviewQueue';
+import { AdminTagsPanel } from '../components/AdminTagsPanel';
 import { COLLEGE_FILTER_OPTIONS } from '../constants/campus';
 
 const SECTIONS = [
@@ -49,6 +51,7 @@ const SECTIONS = [
   { id: 'reviews', label: 'Reviews', Icon: Star },
   { id: 'contributors', label: 'Top contributors', Icon: Trophy },
   { id: 'colleges', label: 'Colleges', Icon: Building2 },
+  { id: 'tags', label: 'Tags', Icon: Tags },
   { id: 'team', label: 'Team and roles', Icon: Users },
 ];
 
@@ -511,7 +514,7 @@ export const AdminDashboardPage = () => {
       {/* Content */}
       <div className="space-y-6 min-w-0">
         {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+        <div className={`flex flex-col md:flex-row gap-3 md:items-center md:justify-between ${activeSection === 'tags' ? 'hidden' : ''}`}>
           <div className="flex w-full md:w-auto p-1 rounded-xl bg-slate-100 md:self-start">
             {TIMEFRAMES.map(({ id, label }) => (
               <button
@@ -910,6 +913,9 @@ export const AdminDashboardPage = () => {
               </section>
             </>
           )}
+
+          {/* TAGS */}
+          {activeSection === 'tags' && <AdminTagsPanel />}
 
           {/* TEAM AND ROLES */}
           {activeSection === 'team' && (
