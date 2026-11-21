@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiRequest } from '../utils/apiClient';
+import { getSiteUrl } from '../utils/siteUrl';
+import { Seo } from '../components/Seo';
 import { sanitizeHtml } from '../utils/sanitize';
 import { useAuth } from '../hooks/useAuth';
 import { ShareProfileModal } from '../components/ShareProfileModal';
@@ -170,6 +172,7 @@ export const PublicProfilePage = () => {
     return (
       <div className="min-h-[60vh] grid place-items-center px-4">
         <div className="text-center">
+          <Seo title="Profile not found" noIndex />
           <UserX size={36} className="mx-auto text-slate-300" />
           <h1 className="mt-4 text-xl font-bold text-slate-900">We could not find @{username}</h1>
           <p className="mt-1 text-sm text-slate-500">Check the spelling, or go back to the hub.</p>
@@ -216,8 +219,28 @@ export const PublicProfilePage = () => {
     { label: 'Loves', value: stats.totalLoves },
   ];
 
+  const profileUrl = `${getSiteUrl()}/${profile.username}`;
+  const approvedTotal = articlePosts.length + projectPosts.length + resourcePosts.length;
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6 sm:space-y-8">
+      <Seo
+        title={`${profile.fullName} (@${profile.username})`}
+        description={`${profile.fullName} studies ${profile.department} at ${profile.college} (session ${profile.session}) and shared ${approvedTotal} approved article${approvedTotal === 1 ? '' : 's'}, project${approvedTotal === 1 ? '' : 's'} and resource${approvedTotal === 1 ? '' : 's'} on Campus Hub.`}
+        path={`/${profile.username}`}
+        type="profile"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          mainEntity: {
+            '@type': 'Person',
+            name: profile.fullName,
+            alternateName: profile.username,
+            url: profileUrl,
+            affiliation: { '@type': 'EducationalOrganization', name: profile.college },
+          },
+        }}
+      />
       {/* Profile card */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
