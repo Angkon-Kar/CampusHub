@@ -1,5 +1,5 @@
 // client/src/pages/PostDetailPage.jsx
-// The full post: article/project text, tags, author, and the actions (open, love, report, edit, delete).
+// The full post: article/project text, file preview, subject info, tags, author, and actions (open, love, report, edit, delete).
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -10,6 +10,7 @@ import { sanitizeHtml, stripHtml } from '../utils/sanitize';
 import { useAuth } from '../hooks/useAuth';
 import { Modal } from '../components/Modal';
 import { Avatar } from '../components/Avatar';
+import { PostPreview } from '../components/PostPreview';
 import { ReportModal } from '../components/ReportModal';
 import { EmptyState } from '../components/EmptyState';
 import { PostDetailSkeleton } from '../components/Skeletons';
@@ -163,7 +164,30 @@ export const PostDetailPage = () => {
     );
   }
 
-  const { title, content, fontFamily, type, college, department, session, tags = [], views, likesCount, lovedByMe, author, createdAt, resourceCredit, status, adminComment, isOwner } = post;
+  const {
+    title,
+    content,
+    fontFamily,
+    type,
+    college,
+    department,
+    session,
+    semester,
+    subjectCode,
+    subjectName,
+    hasPreview,
+    previewUrl,
+    tags = [],
+    views,
+    likesCount,
+    lovedByMe,
+    author,
+    createdAt,
+    resourceCredit,
+    status,
+    adminComment,
+    isOwner,
+  } = post;
   const typeLabel = POST_TYPES.find(({ id: typeId }) => typeId === type)?.label || type;
   const readMinutes = Math.max(1, Math.round(stripHtml(content).split(/\s+/).filter(Boolean).length / 200));
 
@@ -192,7 +216,8 @@ export const PostDetailPage = () => {
           <div className="flex flex-wrap gap-1.5">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">{typeLabel}</span>
             <span className="chip">
-              {college} &middot; {department} &middot; {session}
+              {college} &middot; {department}
+              {semester ? <> &middot; Sem {semester}</> : session && session !== 'General' ? <> &middot; {session}</> : null}
             </span>
             <span className="chip">
               <Clock size={11} /> {readMinutes} min read
@@ -200,6 +225,12 @@ export const PostDetailPage = () => {
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight break-words">{title}</h1>
+
+          {subjectCode && (
+            <p className="text-sm font-medium text-slate-500">
+              {subjectCode} &middot; {subjectName}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
             <Link to={`/${author?.username}`} className="inline-flex items-center gap-2.5 font-medium hover:text-indigo-600 transition">
@@ -219,6 +250,16 @@ export const PostDetailPage = () => {
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
           />
         </div>
+
+        {/* File preview on the detail page (opening this page already counts a view) */}
+        {hasPreview && (
+          <PostPreview
+            title={title}
+            previewUrl={previewUrl}
+            isSignedIn={Boolean(firebaseUser)}
+            onSignIn={() => navigate('/login', { state: { from: `/post/${id}` } })}
+          />
+        )}
 
         {(tags.length > 0 || resourceCredit) && (
           <div className="space-y-3">

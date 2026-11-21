@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock } from 'lucide-react';
 import { sanitizeHtml, stripHtml } from '../utils/sanitize';
 import { Avatar } from './Avatar';
-import { PostPreview } from './PostPreview';
 
 const TYPE_STYLES = {
   resource: { label: 'Notes & slides', style: 'bg-indigo-50 text-indigo-700' },
@@ -25,7 +24,6 @@ export const PostCard = ({
   onLove,
   onReport,
   onTagClick,
-  onSignIn,
   activeTags = [],
 }) => {
   const {
@@ -44,8 +42,6 @@ export const PostCard = ({
     views,
     likesCount,
     author,
-    hasPreview,
-    previewUrl,
   } = post;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -160,9 +156,6 @@ export const PostCard = ({
           className="rich-content text-sm text-slate-600 line-clamp-4 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
         />
-
-        {/* File preview for signed-in users, blurred placeholder for guests */}
-        {hasPreview && <PostPreview title={title} previewUrl={previewUrl} isSignedIn={isSignedIn} onSignIn={onSignIn} />}
 
         {isLong && (
           <Link to={`/post/${_id}`} className="inline-block py-2 -my-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700">

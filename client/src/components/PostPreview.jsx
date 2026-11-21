@@ -1,12 +1,12 @@
 // client/src/components/PostPreview.jsx
-// Live file preview for signed-in users, a blurred placeholder for guests.
+// Live file preview for signed-in users (used on PostDetailPage), a blurred placeholder for guests.
 import { useEffect, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 
 // Decorative "document" for guests. Guests never receive the real file or its link, only this fake page.
 const FAKE_LINES = ['w-3/4', 'w-full', 'w-5/6', 'w-full', 'w-2/3', 'w-full', 'w-4/5', 'w-1/2'];
 
-// Mount the heavy iframe only when the card is near the screen: 9 cards must not load 9 files at once
+// Mount the heavy iframe only when the preview is near the screen
 const useInView = () => {
   const ref = useRef(null);
   const [inView, setInView] = useState(() => typeof IntersectionObserver === 'undefined');
@@ -45,7 +45,7 @@ export const PostPreview = ({ title, previewUrl, isSignedIn, onSignIn }) => {
               src={previewUrl}
               title={`Preview of ${title}`}
               loading="lazy"
-              sandbox="allow-scripts allow-same-origin allow-popups"
+              sandbox="allow-scripts allow-same-origin"
               referrerPolicy="no-referrer"
               onLoad={() => setLoaded(true)}
               className="absolute inset-0 h-full w-full border-0"
