@@ -4,15 +4,19 @@ import os from 'node:os';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-
 import { connectDB } from './config/db.js';
 import linkRoutes from './routes/linkRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import postRoutes from './routes/postRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import adminTagRoutes from './routes/adminTagRoutes.js';
+import tagRoutes from './routes/tagRoutes.js';
+import pushRoutes from './routes/pushRoutes.js';
+import seoRoutes from './routes/seoRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import emailRoutes from './routes/emailRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
@@ -20,20 +24,19 @@ import templateRoutes from './routes/templateRoutes.js';
 
 dotenv.config();
 
-const cpuCores = os.cpus();
-const totalWorkers = Number(process.env.WEB_CONCURRENCY) || Math.min(cpuCores.length, 2);
+const numCPUs = os.cpus().length;
+const isProduction = process.env.NODE_ENV === 'production';
 
-// Node.js Cluster Load Balancer
-if (cluster.isPrimary && process.env.ENABLE_CLUSTER === 'true') {
-  console.log(`🚀 Primary Load Balancer [PID: ${process.pid}] is running.`);
-  console.log(`⚡ Spawning ${totalWorkers} workers...`);
+// Cluster Mode: Production-e multiple CPU cores use kore high concurrency handle korbe
+if (cluster.isPrimary && isProduction && process.env.DISABLE_CLUSTER !== 'true') {
+  console.log(`🚀 Primary Process ${process.pid} is running. Forking ${numCPUs} workers...`);
 
-  for (let i = 0; i < totalWorkers; i++) {
+  for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
-  cluster.on('exit', (worker) => {
-    console.warn(`⚠️ Worker [PID: ${worker.process.pid}] died. Spawning a replacement...`);
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`⚠️ Worker ${worker.process.pid} died (code: ${code}, signal: ${signal}). Restarting...`);
     cluster.fork();
   });
 } else {
@@ -45,20 +48,19 @@ if (cluster.isPrimary && process.env.ENABLE_CLUSTER === 'true') {
   // Connect MongoDB
   connectDB();
 
-  // Security & Global Middlewares
+  // Security & Performance Middlewares
   app.use(helmet());
-  app.use(
-    cors({
-      origin: CLIENT_URL,
-      credentials: true,
-    })
-  );
-  app.use(express.json({ limit: '1mb' }));
+  app.use(compression());
+  app.use(cors({ origin: CLIENT_URL, credentials: true }));
+  app.use(express.json({ limit: '5mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-  // Rate Limiter
+  // Rate Limiting (Prevents DDoS & brute force)
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 200,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please try again later.' },
   });
   app.use('/api', apiLimiter);
@@ -81,23 +83,28 @@ if (cluster.isPrimary && process.env.ENABLE_CLUSTER === 'true') {
   app.get('/api/health', (req, res) => {
     res.status(200).json({
       success: true,
-      message: 'DUTechUnit / Campus Resources Hub Server is live!',
+      message: 'CampusHub API is running smoothly!',
       workerPid: process.pid,
+      timestamp: new Date().toISOString(),
     });
   });
 
-  // All API Routes (Without Chat)
+  // API Routes
   app.use('/api/links', linkRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/posts', postRoutes);
   app.use('/api/profile', profileRoutes);
+  app.use('/api/admin/tags', adminTagRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/tags', tagRoutes);
+  app.use('/api/push', pushRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/email', emailRoutes);
   app.use('/api/reviews', reviewRoutes);
-  
-  // ✅ ঠিক করা হয়েছে: 404 হ্যান্ডলারের উপরে বসানো হয়েছে
   app.use('/api/templates', templateRoutes);
+
+  // /sitemap.xml and /robots.txt (Vercel rewrites these two paths to this server)
+  app.use(seoRoutes);
 
   // Unknown API routes (404 Handler)
   app.use('/api', (req, res) => {
@@ -117,6 +124,6 @@ if (cluster.isPrimary && process.env.ENABLE_CLUSTER === 'true') {
   });
 
   app.listen(PORT, () => {
-    console.log(`🟢 Server [PID: ${process.pid}] running smoothly on port ${PORT}`);
+    console.log(`⚡ Worker ${process.pid} listening on port ${PORT}`);
   });
 }
