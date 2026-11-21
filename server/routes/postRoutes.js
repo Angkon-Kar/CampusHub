@@ -10,6 +10,11 @@ import { validateAndUnmaskLink, inspectLink, linkErrorResponse } from '../middle
 import { sendServerError } from '../utils/httpError.js';
 import { notifyUser } from '../utils/notify.js';
 import { registerView, viewerKeyFor } from '../utils/views.js';
+import { getPreviewUrl, normalizeLinkKey } from '../utils/linkKey.js';
+import { findDuplicatePost } from '../utils/duplicateCheck.js';
+import { getDailyUsage } from '../utils/dailyLimit.js';
+import { resolveTags, loadCatalog, findTagSlugsMatching, MAX_TAGS_PER_POST } from '../utils/tagService.js';
+import { findSubject, SEMESTER_COUNT } from '../data/syllabusIndex.js';
 
 const router = express.Router();
 
@@ -17,8 +22,8 @@ const escapeRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'
 
 const SORT_OPTIONS = ['newest', 'loved', 'viewed'];
 const AUTHOR_FIELDS = 'fullName username college department badges avatarColor avatarUrl bio';
-// Fields that must never reach the public (download links stay locked, reporter ids & admin notes stay private)
-const PUBLIC_EXCLUDE = '-viewedBy -reports -externalLink -unmaskedLink -adminComment -aiSafetyNote';
+// Exclude internal arrays and admin notes in DB queries; externalLink/unmaskedLink are stripped in toPublicPost after computing previewUrl
+const PUBLIC_EXCLUDE = '-viewedBy -reports -adminComment -aiSafetyNote';
 
 // Allow ONLY text-formatting tags and https links. Every attribute (onclick, style, onerror...) is stripped.
 const sanitizeArticleContent = (rawHtml = '') =>
@@ -34,36 +39,50 @@ const sanitizeArticleContent = (rawHtml = '') =>
 
 const toPlainText = (html) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} });
 
-// Public shape of a post. `lovedByMe` tells the client if the signed-in viewer loved it, without exposing voter ids.
+// Public shape of a post. Signed-in viewers get previewUrl + lovedByMe/isLoved; guests only get hasPreview.
+// Download links, reporter ids and admin notes are never sent here.
 const toPublicPost =
-  (viewerId) =>
-  ({ externalLink, unmaskedLink, reports, adminComment, aiSafetyNote, viewedBy, lovedBy = [], ...rest }) => ({
-    ...rest,
-    likesCount: lovedBy.length,
-    lovedByMe: Boolean(viewerId) && lovedBy.some((id) => id.toString() === viewerId),
-    isLinkLocked: true,
-  });
+  (viewerId, hiddenTags = new Set()) =>
+  ({ externalLink, unmaskedLink, reports, adminComment, aiSafetyNote, viewedBy, lovedBy = [], tags = [], ...rest }) => {
+    const previewUrl = getPreviewUrl(unmaskedLink || externalLink);
+    const loved = Boolean(viewerId) && lovedBy.some((id) => id.toString() === viewerId);
+    return {
+      ...rest,
+      tags: tags.filter((tag) => !hiddenTags.has(tag)),
+      likesCount: lovedBy.length,
+      lovedByMe: loved,
+      isLoved: loved,
+      hasPreview: Boolean(previewUrl),
+      previewUrl: viewerId ? previewUrl : null,
+      isLinkLocked: !viewerId,
+    };
+  };
 
-// Popular tags are the same for everybody, so cache them for 5 minutes instead of aggregating on every request
-const TAG_CACHE_MS = 5 * 60 * 1000;
-let tagCache = { at: 0, tags: [] };
+// Daily upload limit. Runs BEFORE the (slow) link scan, so spammers cost us almost nothing.
+const enforceDailyLimit = async (req, res, next) => {
+  try {
+    const author = await User.findOne({ firebaseUid: req.firebaseUser.uid });
+    if (!author) return res.status(404).json({ message: 'User profile not found!' });
 
-const getPopularTags = async () => {
-  if (Date.now() - tagCache.at < TAG_CACHE_MS) return tagCache.tags;
+    const usage = await getDailyUsage(author);
+    if (!usage.unlimited && usage.remaining <= 0) {
+      const hours = Math.max(1, Math.ceil((usage.resetsAt.getTime() - Date.now()) / (60 * 60 * 1000)));
+      return res.status(429).json({
+        success: false,
+        message: `Daily upload limit reached (${usage.limit} posts per 24 hours). You can post again in about ${hours} hour${hours > 1 ? 's' : ''}.`,
+        resetsAt: usage.resetsAt,
+      });
+    }
 
-  const tagStats = await Post.aggregate([
-    { $match: { status: 'approved' } },
-    { $unwind: '$tags' },
-    { $group: { _id: '$tags', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 20 },
-  ]);
-  tagCache = { at: Date.now(), tags: tagStats.map(({ _id }) => _id) };
-  return tagCache.tags;
+    req.postAuthor = author;
+    next();
+  } catch (err) {
+    sendServerError(res, err);
+  }
 };
 
 // Shared by "create" and "edit": validates and cleans everything the author can send
-const parsePostInput = (body = {}) => {
+const parsePostInput = async (body = {}, author = null) => {
   const {
     type,
     title,
@@ -72,6 +91,8 @@ const parsePostInput = (body = {}) => {
     college,
     department,
     session,
+    semester,
+    subjectCode,
     resourceCredit = '',
     tags = [],
   } = body;
@@ -81,20 +102,31 @@ const parsePostInput = (body = {}) => {
   if (!POST_TYPES.includes(type)) return { error: 'Invalid post type!' };
   if (!cleanTitle) return { error: 'Title is required!' };
   if (cleanTitle.length > 150) return { error: 'Title is too long (max 150 characters).' };
-  if (!COLLEGES.includes(college)) return { error: 'Invalid college!' };
-  if (!DEPARTMENTS.includes(department)) return { error: 'Invalid department!' };
-  if (!SESSIONS.includes(session)) return { error: 'Invalid session!' };
   if (!Array.isArray(tags)) return { error: 'Tags must be a list!' };
+
+  // Notes & slides must specify a valid syllabus subject (department > semester > subject).
+  let subject = null;
+  if (type === 'resource') {
+    subject = findSubject(String(department), Number(semester), String(subjectCode));
+    if (!subject) {
+      return { error: 'Choose a valid department, semester and subject for notes and slides.' };
+    }
+  }
+
+  const resolvedCollege = college && COLLEGES.includes(college) ? college : author?.college || 'General';
+  const resolvedDepartment = subject
+    ? String(department)
+    : department && DEPARTMENTS.includes(department)
+    ? department
+    : author?.department || 'General';
+  const resolvedSession = session && SESSIONS.includes(session) ? session : author?.session || 'General';
 
   const cleanContent = sanitizeArticleContent(content);
   if (toPlainText(cleanContent).length > 20000) return { error: 'Content is too long (max 20,000 characters).' };
-  // The HTML itself also has a hard limit, so the database never rejects it with a 500 error
   if (cleanContent.length > 60000) return { error: 'Content has too much formatting. Please shorten it.' };
 
-  // Requirement: Array Methods (.map, .filter) to clean & normalize tags
-  const cleanTags = tags
-    .map((tag) => String(tag).toLowerCase().replace(/[^a-z0-9+#-]/g, '').trim())
-    .filter((tag) => tag.length > 1);
+  // Aliases become the official name ("ds" -> "dsa"), duplicates and hidden tags are dropped, max 5
+  const cleanTags = await resolveTags(tags.slice(0, 20));
 
   return {
     values: {
@@ -102,77 +134,136 @@ const parsePostInput = (body = {}) => {
       title: cleanTitle,
       content: cleanContent,
       fontFamily: FONTS.includes(fontFamily) ? fontFamily : 'Inter',
-      college,
-      department,
-      session,
+      college: resolvedCollege,
+      department: resolvedDepartment,
+      session: resolvedSession,
+      semester: subject ? Number(semester) : null,
+      subjectCode: subject ? subject.code : '',
+      subjectName: subject ? subject.name : '',
       resourceCredit: String(resourceCredit).trim().slice(0, 120),
-      tags: Array.from(new Set(cleanTags)).slice(0, 6),
+      tags: cleanTags,
     },
   };
 };
 
-// 1. Create post -> goes to admin review ('pending')
-router.post('/create', verifyFirebaseToken, requireVerifiedEmail, validateAndUnmaskLink, async (req, res) => {
-  const { uid } = req.firebaseUser;
-  const { originalLink, unmaskedLink, aiSafetyNote } = req.linkMeta;
-
-  const { error, values } = parsePostInput(req.body);
-  if (error) return res.status(400).json({ message: error });
-
+// 0. How many uploads the signed-in user has left today (shown on the create-post page)
+router.get('/my-limit', verifyFirebaseToken, async (req, res) => {
   try {
-    const author = await User.findOne({ firebaseUid: uid });
-    if (!author) return res.status(404).json({ message: 'User profile not found!' });
+    const user = await User.findOne({ firebaseUid: req.firebaseUser.uid }).select('_id role');
+    if (!user) return res.status(404).json({ message: 'User profile not found!' });
 
-    const newPost = await Post.create({
-      ...values,
-      author: author._id,
-      externalLink: originalLink,
-      unmaskedLink,
-      aiSafetyNote,
-      status: 'pending',
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Submitted successfully! Waiting for Admin review.',
-      post: newPost,
-    });
+    res.status(200).json({ success: true, ...(await getDailyUsage(user)) });
   } catch (err) {
     sendServerError(res, err);
   }
 });
 
+// 1. Create post -> goes to admin review ('pending')
+router.post(
+  '/create',
+  verifyFirebaseToken,
+  requireVerifiedEmail,
+  enforceDailyLimit,
+  validateAndUnmaskLink,
+  async (req, res) => {
+    const { originalLink, unmaskedLink, aiSafetyNote } = req.linkMeta;
+
+    try {
+      const author = req.postAuthor || (await User.findOne({ firebaseUid: req.firebaseUser.uid }));
+      if (!author) return res.status(404).json({ message: 'User profile not found!' });
+
+      const { error, values } = await parsePostInput(req.body, author);
+      if (error) return res.status(400).json({ message: error });
+
+      const duplicate = await findDuplicatePost({ originalLink, unmaskedLink });
+      if (duplicate) return res.status(409).json({ success: false, message: duplicate.message, duplicate });
+
+      const newPost = await Post.create({
+        ...values,
+        author: author._id,
+        externalLink: originalLink,
+        unmaskedLink,
+        linkKey: normalizeLinkKey(unmaskedLink),
+        aiSafetyNote,
+        status: 'pending',
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Submitted successfully! Waiting for Admin review.',
+        post: newPost,
+      });
+    } catch (err) {
+      sendServerError(res, err);
+    }
+  }
+);
+
 // 2. Public feed with filters, sorting and pagination (guest-safe: download links are hidden).
-// A token is optional: signed-in users also get `lovedByMe` for every post.
+// Filters: college, department, session, semester, subject, type, tag (comma-separated, all must match), search, sort.
 router.get('/feed', optionalFirebaseToken, async (req, res) => {
-  const { college, department, session, type, tag, search, sort: rawSort, page = '1', limit = '50' } = req.query;
+  const {
+    college,
+    department,
+    session,
+    semester,
+    subject,
+    type,
+    tag,
+    search,
+    sort: rawSort,
+    page = '1',
+    limit = '12',
+  } = req.query;
   const isText = (value) => typeof value === 'string' && value.length > 0;
   const sort = SORT_OPTIONS.includes(rawSort) ? rawSort : 'newest';
 
   try {
-    const query = { status: 'approved' };
+    // Filters shared by the list and by the "popular tags" box (which must not shrink when a tag is picked)
+    const baseQuery = { status: 'approved' };
+    if (isText(college) && college !== 'All') baseQuery.college = college;
+    if (isText(department) && department !== 'All') baseQuery.department = department;
+    if (isText(session) && session !== 'All') baseQuery.session = session;
+    const semesterNumber = parseInt(semester, 10);
+    if (semesterNumber >= 1 && semesterNumber <= SEMESTER_COUNT) baseQuery.semester = semesterNumber;
+    if (isText(subject) && subject !== 'All') baseQuery.subjectCode = subject;
+    if (isText(type) && POST_TYPES.includes(type)) baseQuery.type = type;
 
-    if (isText(college) && college !== 'All') query.college = college;
-    if (isText(department) && department !== 'All') query.department = department;
-    if (isText(session) && session !== 'All') query.session = session;
-    if (isText(type) && POST_TYPES.includes(type)) query.type = type;
-    if (isText(tag)) query.tags = tag.toLowerCase().trim();
+    const query = { ...baseQuery };
+
+    // ?tag=ds,midterm -> aliases are converted ("ds" -> "dsa") and a post must have ALL the tags
+    if (isText(tag)) {
+      const slugs = await resolveTags(tag.split(',').slice(0, MAX_TAGS_PER_POST), { createMissing: false });
+      query.tags = slugs.length > 0 ? { $all: slugs } : '__no_such_tag__';
+    }
+
+    // Search also finds posts through tag aliases and the subject name or code
     if (isText(search)) {
-      const pattern = new RegExp(escapeRegex(search.trim().slice(0, 50)), 'i');
-      query.$or = [{ title: pattern }, { tags: pattern }];
+      const text = search.trim().slice(0, 50);
+      const pattern = new RegExp(escapeRegex(text), 'i');
+      const tagSlugs = await findTagSlugsMatching(text);
+      query.$or = [
+        { title: pattern },
+        { tags: pattern },
+        { subjectName: pattern },
+        { subjectCode: pattern },
+        ...(tagSlugs.length > 0 ? [{ tags: { $in: tagSlugs } }] : []),
+      ];
     }
 
     const safePage = Math.max(1, parseInt(page, 10) || 1);
     const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 12));
     const skip = (safePage - 1) * safeLimit;
 
-    const viewer = req.firebaseUser
-      ? await User.findOne({ firebaseUid: req.firebaseUser.uid }).select('_id').lean()
-      : null;
-    const viewerId = viewer?._id.toString();
+    const [viewer, catalog] = await Promise.all([
+      req.firebaseUser
+        ? User.findOne({ firebaseUid: req.firebaseUser.uid }).select('_id').lean()
+        : Promise.resolve(null),
+      loadCatalog(),
+    ]);
+    const viewerId = viewer?._id.toString() || null;
 
     const loadPosts = () => {
-      // "Most loved" needs the size of the lovedBy array, so it uses an aggregation
       if (sort === 'loved') {
         return Post.aggregate([
           { $match: query },
@@ -185,8 +276,6 @@ router.get('/feed', optionalFirebaseToken, async (req, res) => {
               loveCount: 0,
               viewedBy: 0,
               reports: 0,
-              externalLink: 0,
-              unmaskedLink: 0,
               adminComment: 0,
               aiSafetyNote: 0,
             },
@@ -203,15 +292,29 @@ router.get('/feed', optionalFirebaseToken, async (req, res) => {
         .lean();
     };
 
-    const [posts, totalPosts, popularTags] = await Promise.all([
-      loadPosts(),
-      Post.countDocuments(query),
-      getPopularTags(),
-    ]);
+    const tasks = [loadPosts(), Post.countDocuments(query)];
+    // Popular tags are needed only once (page 1), scoped to the current non-tag filters
+    if (safePage === 1) {
+      tasks.push(
+        Post.aggregate([
+          { $match: baseQuery },
+          { $unwind: '$tags' },
+          { $group: { _id: '$tags', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 40 },
+        ])
+      );
+    }
 
-    // Requirement: Array Method (.map)
-    const publicSafePosts = posts.map(toPublicPost(viewerId));
-    const totalPages = Math.ceil(totalPosts / safeLimit);
+    const [posts, totalPosts, tagStats = []] = await Promise.all(tasks);
+
+    const popularTags = tagStats
+      .filter(({ _id }) => !catalog.hidden.has(_id))
+      .slice(0, 20)
+      .map(({ _id, count }) => ({ slug: _id, label: catalog.bySlug.get(_id)?.label || _id, count }));
+
+    const publicSafePosts = posts.map(toPublicPost(viewerId, catalog.hidden));
+    const totalPages = Math.max(1, Math.ceil(totalPosts / safeLimit));
 
     res.status(200).json({
       success: true,
@@ -234,10 +337,13 @@ router.get('/:id', optionalFirebaseToken, async (req, res) => {
   if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id!' });
 
   try {
-    const viewer = req.firebaseUser
-      ? await User.findOne({ firebaseUid: req.firebaseUser.uid }).select('_id role').lean()
-      : null;
-    const viewerId = viewer?._id.toString();
+    const [viewer, catalog] = await Promise.all([
+      req.firebaseUser
+        ? User.findOne({ firebaseUid: req.firebaseUser.uid }).select('_id role').lean()
+        : Promise.resolve(null),
+      loadCatalog(),
+    ]);
+    const viewerId = viewer?._id.toString() || null;
 
     const post = await Post.findById(id).select('-viewedBy').populate('author', AUTHOR_FIELDS).lean();
     if (!post) return res.status(404).json({ message: 'Post not found!' });
@@ -250,7 +356,7 @@ router.get('/:id', optionalFirebaseToken, async (req, res) => {
       return res.status(404).json({ message: 'Post not found or still under review!' });
     }
 
-    const publicPost = toPublicPost(viewerId)(post);
+    const publicPost = toPublicPost(viewerId, catalog.hidden)(post);
     res.status(200).json({
       success: true,
       post: isOwner
@@ -268,11 +374,8 @@ router.patch('/:id', verifyFirebaseToken, requireVerifiedEmail, async (req, res)
   const { uid } = req.firebaseUser;
   if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id!' });
 
-  const { error, values } = parsePostInput(req.body);
-  if (error) return res.status(400).json({ message: error });
-
   try {
-    const user = await User.findOne({ firebaseUid: uid }).select('_id');
+    const user = await User.findOne({ firebaseUid: uid }).select('_id college department session');
     if (!user) return res.status(404).json({ message: 'User profile not found!' });
 
     const post = await Post.findById(id);
@@ -281,13 +384,24 @@ router.patch('/:id', verifyFirebaseToken, requireVerifiedEmail, async (req, res)
       return res.status(403).json({ message: 'You can only edit your own posts.' });
     }
 
-    // A changed link goes through the same safety checks as a new upload
+    const { error, values } = await parsePostInput(req.body, user);
+    if (error) return res.status(400).json({ message: error });
+
+    // A changed link goes through the same safety & duplicate checks as a new upload
     const newLink = String(req.body.externalLink ?? '').trim();
     if (newLink && newLink !== post.externalLink) {
       try {
         const meta = await inspectLink(newLink, { title: values.title, type: values.type });
+        const duplicate = await findDuplicatePost({
+          originalLink: meta.originalLink,
+          unmaskedLink: meta.unmaskedLink,
+          excludePostId: post._id,
+        });
+        if (duplicate) return res.status(409).json({ success: false, message: duplicate.message, duplicate });
+
         post.externalLink = meta.originalLink;
         post.unmaskedLink = meta.unmaskedLink;
+        post.linkKey = normalizeLinkKey(meta.unmaskedLink || meta.originalLink);
         post.aiSafetyNote = meta.aiSafetyNote;
       } catch (linkError) {
         const { status: code, body } = linkErrorResponse(linkError);
