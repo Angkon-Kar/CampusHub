@@ -2,10 +2,12 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Radar } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Seo } from '../components/Seo';
 
 export const NotFoundPage = () => {
   return (
     <div className="min-h-[90vh] w-full flex items-center justify-center relative overflow-hidden bg-[#fafafa]">
+      <Seo title="Page not found" noIndex />
       
       {/* Ultra-Premium Animated Mesh Gradient Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
