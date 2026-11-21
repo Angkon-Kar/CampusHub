@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock } from 'lucide-react';
 import { sanitizeHtml, stripHtml } from '../utils/sanitize';
 import { Avatar } from './Avatar';
+import { PostPreview } from './PostPreview';
 
 const TYPE_STYLES = {
   resource: { label: 'Notes & slides', style: 'bg-indigo-50 text-indigo-700' },
@@ -15,8 +16,37 @@ const TYPE_STYLES = {
 
 const LONG_POST_CHARS = 280;
 
-export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove, onReport, onTagClick }) => {
-  const { _id, title, content, fontFamily, type, college, department, session, tags, views, likesCount, author } = post;
+export const PostCard = ({
+  post,
+  index = 0,
+  isSignedIn,
+  isLoved,
+  onOpen,
+  onLove,
+  onReport,
+  onTagClick,
+  onSignIn,
+  activeTags = [],
+}) => {
+  const {
+    _id,
+    title,
+    content,
+    fontFamily,
+    type,
+    college,
+    department,
+    session,
+    semester,
+    subjectCode,
+    subjectName,
+    tags,
+    views,
+    likesCount,
+    author,
+    hasPreview,
+    previewUrl,
+  } = post;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const menuButtonRef = useRef(null);
@@ -68,7 +98,8 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
           <div className="flex flex-wrap gap-1.5">
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${style}`}>{label}</span>
             <span className="chip">
-              {college} &middot; {department} &middot; {session}
+              {college} &middot; {department}
+              {semester ? <> &middot; Sem {semester}</> : session && session !== 'General' ? <> &middot; {session}</> : null}
             </span>
             {isLong && (
               <span className="chip bg-amber-50 text-amber-700">
@@ -118,11 +149,20 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
           </Link>
         </h3>
 
+        {subjectCode && (
+          <p className="-mt-1 text-xs font-medium text-slate-500 line-clamp-1">
+            {subjectCode} &middot; {subjectName}
+          </p>
+        )}
+
         <div
           style={{ fontFamily: `'${fontFamily}', sans-serif` }}
           className="rich-content text-sm text-slate-600 line-clamp-4 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
         />
+
+        {/* File preview for signed-in users, blurred placeholder for guests */}
+        {hasPreview && <PostPreview title={title} previewUrl={previewUrl} isSignedIn={isSignedIn} onSignIn={onSignIn} />}
 
         {isLong && (
           <Link to={`/post/${_id}`} className="inline-block py-2 -my-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700">
@@ -137,7 +177,11 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
                 key={tag}
                 type="button"
                 onClick={() => onTagClick(tag)}
-                className="text-xs text-indigo-600 bg-indigo-50/70 px-2.5 py-1.5 rounded-md hover:bg-indigo-100 transition cursor-pointer"
+                className={`text-xs px-2.5 py-1.5 rounded-md transition cursor-pointer ${
+                  activeTags.includes(tag)
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100'
+                }`}
               >
                 #{tag}
               </button>
