@@ -1,32 +1,78 @@
 // client/src/pages/ResourceHubPage.jsx
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, PlusCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiRequest } from '../utils/apiClient';
+import { getSiteUrl } from '../utils/siteUrl';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
 import { PostCard } from '../components/PostCard';
 import { ReportModal } from '../components/ReportModal';
 import { EmptyState } from '../components/EmptyState';
 import { PostCardSkeleton } from '../components/Skeletons';
+import { Seo } from '../components/Seo';
 import {
   COLLEGE_FILTER_OPTIONS,
   DEPARTMENT_FILTER_OPTIONS,
-  SESSION_FILTER_OPTIONS,
   POST_TYPES,
   SORT_OPTIONS,
 } from '../constants/campus';
+import { getSubjectOptions, groupSubjectOptions, semesterText, SEMESTER_COUNT } from '../utils/subjects';
+import { MAX_TAGS_PER_POST } from '../utils/tags';
 
 const TYPE_TABS = [{ id: 'All', label: 'All' }, ...POST_TYPES];
+const PAGE_SIZE = 12;
 
 // Filters live in the page URL (?type=article&college=SIMT), so footer links, refresh and sharing all work
-const FILTER_DEFAULTS = { college: 'All', department: 'All', session: 'All', type: 'All', tag: '', search: '', sort: 'newest' };
+// tag holds up to 5 tags separated by commas (?tag=dsa,midterm): a post must have all of them
+const FILTER_DEFAULTS = {
+  college: 'All',
+  department: 'All',
+  semester: 'All',
+  subject: 'All',
+  type: 'All',
+  tag: '',
+  search: '',
+  sort: 'newest',
+};
+
+// Page title, description and canonical link for the current filters (each filter page gets its own meta title)
+const buildSeo = ({ type, college, department, semester, subject, tag, search }) => {
+  const typeLabel = POST_TYPES.find(({ id }) => id === type)?.label;
+  const parts = [
+    typeLabel,
+    tag && tag.split(',').map((item) => `#${item}`).join(' '),
+    college !== 'All' && college,
+    department !== 'All' && department,
+    semester !== 'All' && `Semester ${semester}`,
+    subject !== 'All' && subject,
+  ].filter(Boolean);
+
+  // Only type and college pages are worth indexing on their own; everything else points back to them
+  const canonical = new URLSearchParams();
+  if (type !== 'All') canonical.set('type', type);
+  if (college !== 'All') canonical.set('college', college);
+  const canonicalQuery = canonical.toString();
+
+  return {
+    title: parts.length > 0 ? `${parts.join(' · ')}: free resources` : undefined,
+    description:
+      parts.length > 0
+        ? `Free ${(typeLabel || 'notes, slides, questions, articles and projects').toLowerCase()} for ${
+            college !== 'All' ? college : 'engineering'
+          } students${department !== 'All' ? ` in ${department}` : ''}, shared by students on Campus Hub.`
+        : undefined,
+    path: canonicalQuery ? `/?${canonicalQuery}` : '/',
+    noIndex: Boolean(search),
+  };
+};
 
 export const ResourceHubPage = () => {
   const { firebaseUser, dbUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Requirement: Array methods (.map, Object.fromEntries) + destructuring
@@ -38,20 +84,33 @@ export const ResourceHubPage = () => {
     [searchParams]
   );
 
-  const setFilter = (key, value) =>
+  // Several filters can change at once (picking a department also resets semester and subject)
+  const setFilters = (patch) =>
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (!value || value === FILTER_DEFAULTS[key]) next.delete(key);
-        else next.set(key, value);
+        Object.entries(patch).forEach(([key, value]) => {
+          if (!value || value === FILTER_DEFAULTS[key]) next.delete(key);
+          else next.set(key, value);
+        });
         return next;
       },
       { replace: true }
     );
 
+  const setFilter = (key, value) => setFilters({ [key]: value });
+
   const clearFilters = () => setSearchParams({}, { replace: true });
 
   const hasActiveFilters = Object.entries(filters).some(([key, value]) => value !== FILTER_DEFAULTS[key]);
+
+  // Up to 5 selected tags. Clicking a selected tag removes it.
+  const selectedTags = filters.tag ? filters.tag.split(',').filter(Boolean) : [];
+  const toggleTag = (slug) => {
+    if (selectedTags.includes(slug)) return setFilter('tag', selectedTags.filter((item) => item !== slug).join(','));
+    if (selectedTags.length >= MAX_TAGS_PER_POST) return toast.error(`You can filter by up to ${MAX_TAGS_PER_POST} tags.`);
+    return setFilter('tag', [...selectedTags, slug].join(','));
+  };
 
   // Search waits until typing stops, so the API is not called on every key
   const debouncedSearch = useDebounce(filters.search, 400);
@@ -64,7 +123,7 @@ export const ResourceHubPage = () => {
   const [feed, setFeed] = useState({ query: '', posts: [], popularTags: [], page: 1, hasMore: false, total: 0 });
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  // The feed belongs to one query AND one viewer, so hearts refresh after login/logout
+  // The feed belongs to one query AND one viewer, so hearts & previews refresh after login/logout
   const feedKey = `${firebaseUser?.uid || 'guest'}|${query}`;
   const loading = authLoading || feed.query !== feedKey;
 
@@ -76,9 +135,12 @@ export const ResourceHubPage = () => {
 
     const loadFeed = async () => {
       try {
-        // The token is optional: signed-in users get their own "loved" hearts back
+        // The token is optional: signed-in users get their own "loved" hearts + file previews back
         const token = await firebaseUser?.getIdToken().catch(() => undefined);
-        const { posts = [], popularTags = [], hasMore = false, totalPosts = 0 } = await apiRequest(`/api/posts/feed?${query}`, { token });
+        const { posts = [], popularTags = [], hasMore = false, totalPosts = 0 } = await apiRequest(
+          `/api/posts/feed?${query}&page=1&limit=${PAGE_SIZE}`,
+          { token }
+        );
         if (!cancelled) setFeed({ query: feedKey, posts, popularTags, page: 1, hasMore, total: totalPosts });
       } catch (error) {
         if (cancelled) return;
@@ -99,7 +161,7 @@ export const ResourceHubPage = () => {
     try {
       const token = await firebaseUser?.getIdToken().catch(() => undefined);
       const nextPage = feed.page + 1;
-      const data = await apiRequest(`/api/posts/feed?${query}&page=${nextPage}`, { token });
+      const data = await apiRequest(`/api/posts/feed?${query}&page=${nextPage}&limit=${PAGE_SIZE}`, { token });
       setFeed((previous) => {
         if (previous.query !== feedKey) return previous; // filters changed while loading
         const known = new Set(previous.posts.map(({ _id }) => _id));
@@ -125,12 +187,13 @@ export const ResourceHubPage = () => {
     }));
 
   const goToCreatePost = () => navigate('/create-post');
+  const goToLogin = () => navigate('/login', { state: { from: `${location.pathname}${location.search}` } });
 
   // Guests cannot download or open drive links
   const handleDownloadOrOpen = async (postId) => {
     if (!firebaseUser) {
       toast.error('Please sign in to download files or open drive links.');
-      return navigate('/login');
+      return goToLogin();
     }
 
     try {
@@ -154,7 +217,7 @@ export const ResourceHubPage = () => {
       const token = await firebaseUser.getIdToken();
       const { likesCount, loved } = await apiRequest(`/api/posts/${postId}/love`, { method: 'POST', token });
 
-      updatePost(postId, (post) => ({ ...post, likesCount, lovedByMe: loved }));
+      updatePost(postId, (post) => ({ ...post, likesCount, lovedByMe: loved, isLoved: loved }));
     } catch (error) {
       toast.error(error.message);
     }
@@ -163,15 +226,46 @@ export const ResourceHubPage = () => {
   const openReport = (post) => {
     if (!firebaseUser) {
       toast.error('Please sign in to report a link.');
-      return navigate('/login');
+      return goToLogin();
     }
     setReportTarget(post);
   };
 
-  const selectClass = 'input !py-2.5 cursor-pointer';
+  const selectClass = 'input !py-2.5 cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
+
+  // Subject list for the chosen department + semester (electives are expanded to the real courses)
+  const subjectGroups =
+    filters.department !== 'All' && filters.semester !== 'All'
+      ? groupSubjectOptions(getSubjectOptions(filters.department, filters.semester))
+      : [];
+  const hasScopedFilters = ['college', 'department', 'semester', 'subject', 'type'].some(
+    (key) => filters[key] !== FILTER_DEFAULTS[key]
+  );
+
+  const seo = buildSeo(filters);
+  const siteUrl = getSiteUrl();
 
   return (
     <div>
+      <Seo
+        {...seo}
+        jsonLd={
+          !hasActiveFilters
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'WebSite',
+                name: 'Campus Hub',
+                url: siteUrl,
+                potentialAction: {
+                  '@type': 'SearchAction',
+                  target: `${siteUrl}/?search={search_term_string}`,
+                  'query-input': 'required name=search_term_string',
+                },
+              }
+            : undefined
+        }
+      />
+
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-slate-200/70 bg-gradient-to-b from-white via-white to-indigo-50/40">
         <div className="bg-dots absolute inset-0" aria-hidden="true" />
@@ -203,7 +297,7 @@ export const ResourceHubPage = () => {
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
-                placeholder="Search by topic or #tag, e.g. algorithms"
+                placeholder="Search by topic, subject or #tag, e.g. algorithms"
                 value={filters.search}
                 onChange={(e) => setFilter('search', e.target.value)}
                 className="input !pl-11 !py-3.5 !rounded-2xl shadow-sm shadow-slate-900/5"
@@ -235,8 +329,8 @@ export const ResourceHubPage = () => {
           ))}
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Filters: department > semester > subject depend on each other */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <select value={filters.college} onChange={(e) => setFilter('college', e.target.value)} className={selectClass} aria-label="College">
             {COLLEGE_FILTER_OPTIONS.map((c) => (
               <option key={c} value={c}>
@@ -244,18 +338,48 @@ export const ResourceHubPage = () => {
               </option>
             ))}
           </select>
-          <select value={filters.department} onChange={(e) => setFilter('department', e.target.value)} className={selectClass} aria-label="Department">
+          <select
+            value={filters.department}
+            onChange={(e) => setFilters({ department: e.target.value, semester: 'All', subject: 'All' })}
+            className={selectClass}
+            aria-label="Department"
+          >
             {DEPARTMENT_FILTER_OPTIONS.map((d) => (
               <option key={d} value={d}>
                 {d === 'All' ? 'All departments' : d}
               </option>
             ))}
           </select>
-          <select value={filters.session} onChange={(e) => setFilter('session', e.target.value)} className={selectClass} aria-label="Session">
-            {SESSION_FILTER_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s === 'All' ? 'All sessions' : `Session ${s}`}
+          <select
+            value={filters.semester}
+            disabled={filters.department === 'All'}
+            onChange={(e) => setFilters({ semester: e.target.value, subject: 'All' })}
+            className={selectClass}
+            aria-label="Semester"
+          >
+            <option value="All">{filters.department === 'All' ? 'Semester (pick a department)' : 'All semesters'}</option>
+            {Array.from({ length: SEMESTER_COUNT }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={String(n)}>
+                {semesterText(n)}
               </option>
+            ))}
+          </select>
+          <select
+            value={filters.subject}
+            disabled={filters.semester === 'All' || filters.department === 'All'}
+            onChange={(e) => setFilter('subject', e.target.value)}
+            className={selectClass}
+            aria-label="Subject"
+          >
+            <option value="All">{filters.semester === 'All' ? 'Subject (pick a semester)' : 'All subjects'}</option>
+            {subjectGroups.map(({ group, items }) => (
+              <optgroup key={group} label={group}>
+                {items.map(({ code, name }) => (
+                  <option key={code} value={code}>
+                    {code} &middot; {name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -292,23 +416,36 @@ export const ResourceHubPage = () => {
           )}
         </div>
 
-        {/* Tags + clear */}
+        {/* Tags: selected tags first, then popular tags for the current filters */}
         <div className="flex items-center gap-2 flex-wrap">
-          {feed.popularTags.length > 0 && <span className="text-sm text-slate-500">Popular tags:</span>}
-          {feed.popularTags.map((tag) => (
+          {selectedTags.map((slug) => (
             <button
-              key={tag}
+              key={slug}
               type="button"
-              onClick={() => setFilter('tag', filters.tag === tag ? '' : tag)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition cursor-pointer ${
-                filters.tag === tag
-                  ? 'bg-indigo-600 border-indigo-600 text-white'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700'
-              }`}
+              onClick={() => toggleTag(slug)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border bg-indigo-600 border-indigo-600 text-white transition cursor-pointer"
+              aria-label={`Remove tag ${slug}`}
             >
-              #{tag}
+              #{slug} <X size={12} />
             </button>
           ))}
+          {feed.popularTags.some((item) => !selectedTags.includes(typeof item === 'string' ? item : item.slug)) && (
+            <span className="text-sm text-slate-500">{hasScopedFilters ? 'Popular with these filters:' : 'Popular tags:'}</span>
+          )}
+          {feed.popularTags
+            .map((item) => (typeof item === 'string' ? { slug: item, label: item, count: null } : item))
+            .filter(({ slug }) => !selectedTags.includes(slug))
+            .map(({ slug, label, count }) => (
+              <button
+                key={slug}
+                type="button"
+                title={label !== slug ? label : undefined}
+                onClick={() => toggleTag(slug)}
+                className="px-3 py-1 rounded-full text-xs font-medium border transition cursor-pointer bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
+              >
+                #{slug} {count !== null && <span className="text-slate-400">{count}</span>}
+              </button>
+            ))}
           {hasActiveFilters && (
             <button
               type="button"
@@ -336,13 +473,15 @@ export const ResourceHubPage = () => {
               <PostCard
                 key={post._id}
                 post={post}
-                index={index}
+                index={index % PAGE_SIZE}
                 isSignedIn={Boolean(firebaseUser)}
-                isLoved={Boolean(post.lovedByMe)}
+                isLoved={Boolean(post.lovedByMe || post.isLoved)}
                 onOpen={handleDownloadOrOpen}
                 onLove={handleLoveReact}
                 onReport={openReport}
-                onTagClick={(tag) => setFilter('tag', tag)}
+                onTagClick={toggleTag}
+                activeTags={selectedTags}
+                onSignIn={goToLogin}
               />
             ))}
 
@@ -362,7 +501,11 @@ export const ResourceHubPage = () => {
           <EmptyState
             variant={hasActiveFilters ? 'search' : 'posts'}
             title={hasActiveFilters ? 'Nothing matches these filters' : 'No resources yet'}
-            text={hasActiveFilters ? 'Try a different college or session, or share the first resource.' : 'Be the first to share something useful with other students.'}
+            text={
+              hasActiveFilters
+                ? 'Try a different department, semester or tag, or share the first resource.'
+                : 'Be the first to share something useful with other students.'
+            }
           >
             {hasActiveFilters && (
               <button type="button" onClick={clearFilters} className="btn-secondary">
