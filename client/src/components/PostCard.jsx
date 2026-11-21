@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock } from 'lucide-react';
+import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { sanitizeHtml, stripHtml } from '../utils/sanitize';
 import { Avatar } from './Avatar';
 
@@ -72,6 +73,27 @@ export const PostCard = ({
     };
   }, [menuOpen]);
 
+  const handleShare = async () => {
+    setMenuOpen(false);
+    const shareUrl = `${window.location.origin}/post/${_id}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url: shareUrl });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Post link copied!');
+    } catch {
+      toast.error('Could not copy the link.');
+    }
+  };
+
   const { label, style } = TYPE_STYLES[type] || { label: type, style: 'bg-slate-100 text-slate-700' };
 
   // Long posts get a "Long read" label and a link to the full page
@@ -123,6 +145,14 @@ export const PostCard = ({
                 aria-label="Post options"
                 className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-900/5 p-1.5 z-20"
               >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleShare}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none rounded-lg cursor-pointer"
+                >
+                  <Share2 size={14} /> Share post
+                </button>
                 <button
                   type="button"
                   role="menuitem"
