@@ -6,6 +6,7 @@ import { CheckCircle2, KeyRound, Mail, MailCheck, MailWarning, LockKeyhole, Send
 import { auth, googleProvider, githubProvider } from '../config/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useEmailActions } from '../hooks/useEmailActions';
+import { NotificationSettings } from './NotificationSettings';
 import { apiRequest } from '../utils/apiClient';
 import { getAuthErrorMessage } from '../utils/authErrors';
 
@@ -214,6 +215,8 @@ export const ProfileSecurityTab = () => {
           })}
         </div>
       </Section>
+
+      <NotificationSettings />
     </div>
   );
 };

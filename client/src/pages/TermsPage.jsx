@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CONTACT_EMAIL } from '../constants/campus';
+import { Seo } from '../components/Seo';
 
 const SECTIONS = [
   {
@@ -52,6 +53,11 @@ const SECTIONS = [
 
 export const TermsPage = () => (
   <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
+    <Seo
+      title="Terms and conditions"
+      description="The rules for sharing on Campus Hub: teacher permission and copyright, link safety, 100% free education and account responsibility."
+      path="/terms"
+    />
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Terms and conditions</h1>
       <p className="mt-3 text-slate-500 leading-relaxed">

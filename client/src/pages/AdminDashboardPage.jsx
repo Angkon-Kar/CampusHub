@@ -31,15 +31,18 @@ import {
   Link2Off,
   RefreshCw,
   Star,
+  Tags,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import { apiRequest } from '../utils/apiClient';
 import { Modal } from '../components/Modal';
+import { Seo } from '../components/Seo';
 import { Bone, DashboardSkeleton } from '../components/Skeletons';
 import { scrollBehavior } from '../utils/scrollToTop';
 import { EmptyState } from '../components/EmptyState';
 import { ReviewQueue } from '../components/ReviewQueue';
+import { AdminTagsPanel } from '../components/AdminTagsPanel';
 import { COLLEGE_FILTER_OPTIONS } from '../constants/campus';
 
 const SECTIONS = [
@@ -48,6 +51,7 @@ const SECTIONS = [
   { id: 'reviews', label: 'Reviews', Icon: Star },
   { id: 'contributors', label: 'Top contributors', Icon: Trophy },
   { id: 'colleges', label: 'Colleges', Icon: Building2 },
+  { id: 'tags', label: 'Tags', Icon: Tags },
   { id: 'team', label: 'Team and roles', Icon: Users },
 ];
 
@@ -437,6 +441,7 @@ export const AdminDashboardPage = () => {
     if (loading) return <DashboardSkeleton />;
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
+        <Seo title="Admin panel" noIndex />
         <AlertTriangle size={34} className="mx-auto text-amber-500" />
         <h2 className="mt-4 text-lg font-bold text-slate-900">Could not load the dashboard</h2>
         <p className="mt-1 text-sm text-slate-500">{error || 'Something went wrong. Please try again.'}</p>
@@ -466,6 +471,8 @@ export const AdminDashboardPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[230px_minmax(0,1fr)] gap-4 lg:gap-8">
+      <Seo title="Admin panel" noIndex />
+
       {/* Sidebar */}
       <aside className="min-w-0 sticky top-[4.25rem] z-30 lg:top-24 lg:self-start">
         <div className="card p-1.5 lg:p-3 bg-white/95 backdrop-blur">
@@ -507,7 +514,7 @@ export const AdminDashboardPage = () => {
       {/* Content */}
       <div className="space-y-6 min-w-0">
         {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+        <div className={`flex flex-col md:flex-row gap-3 md:items-center md:justify-between ${activeSection === 'tags' ? 'hidden' : ''}`}>
           <div className="flex w-full md:w-auto p-1 rounded-xl bg-slate-100 md:self-start">
             {TIMEFRAMES.map(({ id, label }) => (
               <button
@@ -659,107 +666,107 @@ export const AdminDashboardPage = () => {
                 <EmptyState variant="queue" bare compact title="Nothing in this queue" text="Nice work. New uploads and reports will appear here." />
               ) : (
                 <>
-                {/* Phones: one card per post */}
-                <div className="md:hidden divide-y divide-slate-100">
-                  {queuePosts.map((post) => (
-                    <QueueMobileCard
-                      key={post._id}
-                      post={post}
-                      onApprove={() => handleReview(post, 'approved', post.adminComment || '', '')}
-                      onReview={() => setReviewTarget(post)}
-                      onDelete={() => setDeleteTarget(post)}
-                    />
-                  ))}
-                </div>
-                {/* Tablets and desktops: table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                        <th className="px-6 py-3 font-medium">Post</th>
-                        <th className="px-3 py-3 font-medium">Author</th>
-                        <th className="px-3 py-3 font-medium">Status</th>
-                        <th className="px-3 py-3 font-medium">Link</th>
-                        <th className="px-6 py-3 font-medium text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {queuePosts.map((post) => {
-                        const { _id, title, type, status, author, college: postCollege, department, createdAt, externalLink, unmaskedLink, reports = [] } = post;
-                        const isMasked = unmaskedLink && externalLink !== unmaskedLink;
-                        return (
-                          <tr key={_id} className="hover:bg-slate-50/60 align-top">
-                            <td className="px-6 py-4 max-w-xs">
-                              <p className="font-medium text-slate-900 line-clamp-2">{title}</p>
-                              <p className="text-xs text-slate-500 mt-1">
-                                <span className="capitalize">{type}</span> &middot; {postCollege} &middot; {department} &middot;{' '}
-                                {new Date(createdAt).toLocaleDateString()}
-                              </p>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <Link to={`/${author?.username}`} className="text-slate-700 hover:text-indigo-600">
-                                @{author?.username || 'deleted'}
-                              </Link>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap space-y-1">
-                              <StatusBadge status={status} />
-                              {reports.length > 0 && (
-                                <p className="text-xs text-orange-600 flex items-center gap-1">
-                                  <AlertTriangle size={12} /> {reports.length} report{reports.length > 1 ? 's' : ''}
+                  {/* Phones: one card per post */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {queuePosts.map((post) => (
+                      <QueueMobileCard
+                        key={post._id}
+                        post={post}
+                        onApprove={() => handleReview(post, 'approved', post.adminComment || '', '')}
+                        onReview={() => setReviewTarget(post)}
+                        onDelete={() => setDeleteTarget(post)}
+                      />
+                    ))}
+                  </div>
+                  {/* Tablets and desktops: table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                          <th className="px-6 py-3 font-medium">Post</th>
+                          <th className="px-3 py-3 font-medium">Author</th>
+                          <th className="px-3 py-3 font-medium">Status</th>
+                          <th className="px-3 py-3 font-medium">Link</th>
+                          <th className="px-6 py-3 font-medium text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {queuePosts.map((post) => {
+                          const { _id, title, type, status, author, college: postCollege, department, createdAt, externalLink, unmaskedLink, reports = [] } = post;
+                          const isMasked = unmaskedLink && externalLink !== unmaskedLink;
+                          return (
+                            <tr key={_id} className="hover:bg-slate-50/60 align-top">
+                              <td className="px-6 py-4 max-w-xs">
+                                <p className="font-medium text-slate-900 line-clamp-2">{title}</p>
+                                <p className="text-xs text-slate-500 mt-1">
+                                  <span className="capitalize">{type}</span> &middot; {postCollege} &middot; {department} &middot;{' '}
+                                  {new Date(createdAt).toLocaleDateString()}
                                 </p>
-                              )}
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <a
-                                href={unmaskedLink || externalLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700"
-                              >
-                                <ExternalLink size={14} /> Open
-                              </a>
-                              {isMasked && (
-                                <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-                                  <Link2Off size={12} /> Was a short link
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex justify-end gap-2">
-                                {status !== 'approved' && (
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <Link to={`/${author?.username}`} className="text-slate-700 hover:text-indigo-600">
+                                  @{author?.username || 'deleted'}
+                                </Link>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap space-y-1">
+                                <StatusBadge status={status} />
+                                {reports.length > 0 && (
+                                  <p className="text-xs text-orange-600 flex items-center gap-1">
+                                    <AlertTriangle size={12} /> {reports.length} report{reports.length > 1 ? 's' : ''}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <a
+                                  href={unmaskedLink || externalLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700"
+                                >
+                                  <ExternalLink size={14} /> Open
+                                </a>
+                                {isMasked && (
+                                  <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+                                    <Link2Off size={12} /> Was a short link
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex justify-end gap-2">
+                                  {status !== 'approved' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReview(post, 'approved', post.adminComment || '', '')}
+                                      className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
+                                      title="Approve"
+                                    >
+                                      <Check size={16} />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={() => handleReview(post, 'approved', post.adminComment || '', '')}
-                                    className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
-                                    title="Approve"
+                                    onClick={() => setReviewTarget(post)}
+                                    className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                                    title="Review, decline or comment"
                                   >
-                                    <Check size={16} />
+                                    <MessageSquare size={16} />
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => setReviewTarget(post)}
-                                  className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                                  title="Review, decline or comment"
-                                >
-                                  <MessageSquare size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteTarget(post)}
-                                  className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
-                                  title="Delete permanently"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTarget(post)}
+                                    className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                                    title="Delete permanently"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
 
@@ -787,69 +794,69 @@ export const AdminDashboardPage = () => {
                 <div className="py-16 text-center text-sm text-slate-500">No contributors yet.</div>
               ) : (
                 <>
-                <ol className="md:hidden divide-y divide-slate-100 border-t border-slate-100">
-                  {topContributors.map(({ _id, fullName, username, college: col, department, totalUploads, approvedUploads, totalViews, totalLoves }, index) => (
-                    <li key={_id} className="px-4 py-3.5 flex gap-3">
-                      <span className="w-6 shrink-0 text-center font-bold text-slate-400 pt-0.5">{index + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <Link to={`/${username}`} className="font-medium text-slate-900 hover:text-indigo-600 break-words">
-                          {fullName}
-                        </Link>
-                        <p className="text-xs text-slate-500 break-all">
-                          @{username} &middot; {col} &middot; {department}
-                        </p>
-                        <dl className="mt-2.5 grid grid-cols-4 gap-2 text-center">
-                          {[
-                            ['Uploads', totalUploads, 'text-slate-900'],
-                            ['Approved', approvedUploads, 'text-emerald-600'],
-                            ['Views', totalViews, 'text-slate-900'],
-                            ['Loves', totalLoves, 'text-rose-500'],
-                          ].map(([label, value, color]) => (
-                            <div key={label} className="rounded-lg bg-slate-50 py-1.5">
-                              <dd className={`text-sm font-bold ${color}`}>{formatNumber(value)}</dd>
-                              <dt className="text-[10px] text-slate-400">{label}</dt>
-                            </div>
-                          ))}
-                        </dl>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-slate-500 border-y border-slate-100">
-                        <th className="px-6 py-3 font-medium w-12">#</th>
-                        <th className="px-3 py-3 font-medium">Student</th>
-                        <th className="px-3 py-3 font-medium">College</th>
-                        <th className="px-3 py-3 font-medium text-right">Uploads</th>
-                        <th className="px-3 py-3 font-medium text-right">Approved</th>
-                        <th className="px-3 py-3 font-medium text-right">Views</th>
-                        <th className="px-6 py-3 font-medium text-right">Loves</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {topContributors.map(({ _id, fullName, username, college: col, department, totalUploads, approvedUploads, totalViews, totalLoves }, index) => (
-                        <tr key={_id} className="hover:bg-slate-50/60">
-                          <td className="px-6 py-3.5 font-semibold text-slate-400">{index + 1}</td>
-                          <td className="px-3 py-3.5">
-                            <Link to={`/${username}`} className="font-medium text-slate-900 hover:text-indigo-600">
-                              {fullName}
-                            </Link>
-                            <p className="text-xs text-slate-500">@{username}</p>
-                          </td>
-                          <td className="px-3 py-3.5 text-slate-600">
-                            {col} &middot; {department}
-                          </td>
-                          <td className="px-3 py-3.5 text-right">{formatNumber(totalUploads)}</td>
-                          <td className="px-3 py-3.5 text-right font-semibold text-emerald-600">{formatNumber(approvedUploads)}</td>
-                          <td className="px-3 py-3.5 text-right">{formatNumber(totalViews)}</td>
-                          <td className="px-6 py-3.5 text-right text-rose-500">{formatNumber(totalLoves)}</td>
+                  <ol className="md:hidden divide-y divide-slate-100 border-t border-slate-100">
+                    {topContributors.map(({ _id, fullName, username, college: col, department, totalUploads, approvedUploads, totalViews, totalLoves }, index) => (
+                      <li key={_id} className="px-4 py-3.5 flex gap-3">
+                        <span className="w-6 shrink-0 text-center font-bold text-slate-400 pt-0.5">{index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <Link to={`/${username}`} className="font-medium text-slate-900 hover:text-indigo-600 break-words">
+                            {fullName}
+                          </Link>
+                          <p className="text-xs text-slate-500 break-all">
+                            @{username} &middot; {col} &middot; {department}
+                          </p>
+                          <dl className="mt-2.5 grid grid-cols-4 gap-2 text-center">
+                            {[
+                              ['Uploads', totalUploads, 'text-slate-900'],
+                              ['Approved', approvedUploads, 'text-emerald-600'],
+                              ['Views', totalViews, 'text-slate-900'],
+                              ['Loves', totalLoves, 'text-rose-500'],
+                            ].map(([label, value, color]) => (
+                              <div key={label} className="rounded-lg bg-slate-50 py-1.5">
+                                <dd className={`text-sm font-bold ${color}`}>{formatNumber(value)}</dd>
+                                <dt className="text-[10px] text-slate-400">{label}</dt>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-slate-500 border-y border-slate-100">
+                          <th className="px-6 py-3 font-medium w-12">#</th>
+                          <th className="px-3 py-3 font-medium">Student</th>
+                          <th className="px-3 py-3 font-medium">College</th>
+                          <th className="px-3 py-3 font-medium text-right">Uploads</th>
+                          <th className="px-3 py-3 font-medium text-right">Approved</th>
+                          <th className="px-3 py-3 font-medium text-right">Views</th>
+                          <th className="px-6 py-3 font-medium text-right">Loves</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {topContributors.map(({ _id, fullName, username, college: col, department, totalUploads, approvedUploads, totalViews, totalLoves }, index) => (
+                          <tr key={_id} className="hover:bg-slate-50/60">
+                            <td className="px-6 py-3.5 font-semibold text-slate-400">{index + 1}</td>
+                            <td className="px-3 py-3.5">
+                              <Link to={`/${username}`} className="font-medium text-slate-900 hover:text-indigo-600">
+                                {fullName}
+                              </Link>
+                              <p className="text-xs text-slate-500">@{username}</p>
+                            </td>
+                            <td className="px-3 py-3.5 text-slate-600">
+                              {col} &middot; {department}
+                            </td>
+                            <td className="px-3 py-3.5 text-right">{formatNumber(totalUploads)}</td>
+                            <td className="px-3 py-3.5 text-right font-semibold text-emerald-600">{formatNumber(approvedUploads)}</td>
+                            <td className="px-3 py-3.5 text-right">{formatNumber(totalViews)}</td>
+                            <td className="px-6 py-3.5 text-right text-rose-500">{formatNumber(totalLoves)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
             </section>
@@ -882,30 +889,33 @@ export const AdminDashboardPage = () => {
 
               <section className="card overflow-hidden">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-0 text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                      <th className="px-3 sm:px-6 py-3 font-medium">College</th>
-                      <th className="px-3 py-3 font-medium text-right">Posts</th>
-                      <th className="px-3 py-3 font-medium text-right">Views</th>
-                      <th className="px-3 sm:px-6 py-3 font-medium text-right">Loves</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {collegeBreakdown.map(({ college: col, posts: postCount, views, loves }) => (
-                      <tr key={col} className="hover:bg-slate-50/60">
-                        <td className="px-3 sm:px-6 py-3.5 font-medium text-slate-900">{col}</td>
-                        <td className="px-3 py-3.5 text-right">{formatNumber(postCount)}</td>
-                        <td className="px-3 py-3.5 text-right">{formatNumber(views)}</td>
-                        <td className="px-3 sm:px-6 py-3.5 text-right text-rose-500">{formatNumber(loves)}</td>
+                  <table className="w-full min-w-0 text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                        <th className="px-3 sm:px-6 py-3 font-medium">College</th>
+                        <th className="px-3 py-3 font-medium text-right">Posts</th>
+                        <th className="px-3 py-3 font-medium text-right">Views</th>
+                        <th className="px-3 sm:px-6 py-3 font-medium text-right">Loves</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {collegeBreakdown.map(({ college: col, posts: postCount, views, loves }) => (
+                        <tr key={col} className="hover:bg-slate-50/60">
+                          <td className="px-3 sm:px-6 py-3.5 font-medium text-slate-900">{col}</td>
+                          <td className="px-3 py-3.5 text-right">{formatNumber(postCount)}</td>
+                          <td className="px-3 py-3.5 text-right">{formatNumber(views)}</td>
+                          <td className="px-3 sm:px-6 py-3.5 text-right text-rose-500">{formatNumber(loves)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </>
           )}
+
+          {/* TAGS */}
+          {activeSection === 'tags' && <AdminTagsPanel />}
 
           {/* TEAM AND ROLES */}
           {activeSection === 'team' && (

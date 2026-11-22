@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock } from 'lucide-react';
+import { Heart, Eye, MoreVertical, Flag, Lock, ExternalLink, Clock, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { sanitizeHtml, stripHtml } from '../utils/sanitize';
 import { Avatar } from './Avatar';
 
@@ -15,8 +16,34 @@ const TYPE_STYLES = {
 
 const LONG_POST_CHARS = 280;
 
-export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove, onReport, onTagClick }) => {
-  const { _id, title, content, fontFamily, type, college, department, session, tags, views, likesCount, author } = post;
+export const PostCard = ({
+  post,
+  index = 0,
+  isSignedIn,
+  isLoved,
+  onOpen,
+  onLove,
+  onReport,
+  onTagClick,
+  activeTags = [],
+}) => {
+  const {
+    _id,
+    title,
+    content,
+    fontFamily,
+    type,
+    college,
+    department,
+    session,
+    semester,
+    subjectCode,
+    subjectName,
+    tags,
+    views,
+    likesCount,
+    author,
+  } = post;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const menuButtonRef = useRef(null);
@@ -46,6 +73,27 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
     };
   }, [menuOpen]);
 
+  const handleShare = async () => {
+    setMenuOpen(false);
+    const shareUrl = `${window.location.origin}/post/${_id}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url: shareUrl });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Post link copied!');
+    } catch {
+      toast.error('Could not copy the link.');
+    }
+  };
+
   const { label, style } = TYPE_STYLES[type] || { label: type, style: 'bg-slate-100 text-slate-700' };
 
   // Long posts get a "Long read" label and a link to the full page
@@ -68,7 +116,8 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
           <div className="flex flex-wrap gap-1.5">
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${style}`}>{label}</span>
             <span className="chip">
-              {college} &middot; {department} &middot; {session}
+              {college} &middot; {department}
+              {semester ? <> &middot; Sem {semester}</> : session && session !== 'General' ? <> &middot; {session}</> : null}
             </span>
             {isLong && (
               <span className="chip bg-amber-50 text-amber-700">
@@ -99,6 +148,14 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
                 <button
                   type="button"
                   role="menuitem"
+                  onClick={handleShare}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none rounded-lg cursor-pointer"
+                >
+                  <Share2 size={14} /> Share post
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
                     onReport({ _id, title });
@@ -117,6 +174,12 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
             {title}
           </Link>
         </h3>
+
+        {subjectCode && (
+          <p className="-mt-1 text-xs font-medium text-slate-500 line-clamp-1">
+            {subjectCode} &middot; {subjectName}
+          </p>
+        )}
 
         <div
           style={{ fontFamily: `'${fontFamily}', sans-serif` }}
@@ -137,7 +200,11 @@ export const PostCard = ({ post, index = 0, isSignedIn, isLoved, onOpen, onLove,
                 key={tag}
                 type="button"
                 onClick={() => onTagClick(tag)}
-                className="text-xs text-indigo-600 bg-indigo-50/70 px-2.5 py-1.5 rounded-md hover:bg-indigo-100 transition cursor-pointer"
+                className={`text-xs px-2.5 py-1.5 rounded-md transition cursor-pointer ${
+                  activeTags.includes(tag)
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100'
+                }`}
               >
                 #{tag}
               </button>
