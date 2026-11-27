@@ -102,7 +102,7 @@ export const PostDetailPage = () => {
     }
     try {
       const token = await firebaseUser.getIdToken();
-      const { downloadUrl, views } = await apiRequest(`/api/posts/${id}/access-link`, { method: 'POST', token });
+      const { downloadUrl, views } = await apiRequest(`/api/posts/${postId}/access-link`, { method: 'POST', token });
       updatePost({ views });
       toast.success('Opening verified link...');
       window.open(downloadUrl, '_blank', 'noopener,noreferrer');
@@ -115,7 +115,7 @@ export const PostDetailPage = () => {
     if (!firebaseUser || !dbUser) return toast.error('Please sign in to react.');
     try {
       const token = await firebaseUser.getIdToken();
-      const { likesCount, loved } = await apiRequest(`/api/posts/${id}/love`, { method: 'POST', token });
+      const { likesCount, loved } = await apiRequest(`/api/posts/${postId}/love`, { method: 'POST', token });
       updatePost({ likesCount, lovedByMe: loved });
     } catch (error) {
       toast.error(error.message);
@@ -142,7 +142,7 @@ export const PostDetailPage = () => {
   const handleDelete = async () => {
     try {
       const token = await firebaseUser.getIdToken();
-      const { message } = await apiRequest(`/api/posts/${id}`, { method: 'DELETE', token });
+      const { message } = await apiRequest(`/api/posts/${postId}`, { method: 'DELETE', token });
       toast.success(message);
       navigate(`/${dbUser.username}`, { state: { tab: 'status' } });
     } catch (error) {
@@ -321,7 +321,7 @@ export const PostDetailPage = () => {
 
         {isOwner && (
           <div className="flex flex-wrap gap-3">
-            <Link to={`/post/${id}/edit`} className="btn-secondary">
+            <Link to={`/post/${postId}/edit`} className="btn-secondary">
               <Pencil size={15} /> {status === 'declined' ? 'Edit and resubmit' : 'Edit post'}
             </Link>
             <button type="button" onClick={() => setDeleteOpen(true)} className="btn-secondary !text-rose-600 hover:!bg-rose-50">
@@ -331,7 +331,7 @@ export const PostDetailPage = () => {
         )}
       </motion.article>
 
-      {reportOpen && <ReportModal post={{ _id: id, title }} onClose={() => setReportOpen(false)} />}
+      {reportOpen && <ReportModal post={{ _id: postId, title }} onClose={() => setReportOpen(false)} />}
 
       <Modal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete this post?" size="sm">
         <div className="space-y-5">

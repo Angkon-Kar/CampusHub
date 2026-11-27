@@ -10,6 +10,7 @@ const postSchema = new mongoose.Schema(
     author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     type: { type: String, enum: POST_TYPES, required: true },
     title: { type: String, required: true, trim: true, maxlength: 150 },
+    slug: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
     content: { type: String, default: '', maxlength: 60000 },
     fontFamily: { type: String, enum: FONTS, default: 'Inter' },
     externalLink: { type: String, required: true },
