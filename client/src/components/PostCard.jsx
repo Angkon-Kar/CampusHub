@@ -29,6 +29,7 @@ export const PostCard = ({
 }) => {
   const {
     _id,
+    slug,
     title,
     content,
     fontFamily,
@@ -47,6 +48,8 @@ export const PostCard = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const menuButtonRef = useRef(null);
+
+  const postPath = `/post/${slug || _id}`;
 
   // Close the 3-dot menu on outside click (this also closes it when another card's menu opens) or Escape
   useEffect(() => {
@@ -75,7 +78,7 @@ export const PostCard = ({
 
   const handleShare = async () => {
     setMenuOpen(false);
-    const shareUrl = `${window.location.origin}/post/${_id}`;
+    const shareUrl = `${window.location.origin}${postPath}`;
 
     if (navigator.share) {
       try {
@@ -170,7 +173,7 @@ export const PostCard = ({
         </div>
 
         <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-2 transition-colors group-hover:text-indigo-700">
-          <Link to={`/post/${_id}`} className="focus-visible:outline-none focus-visible:underline">
+          <Link to={postPath} className="focus-visible:outline-none focus-visible:underline">
             {title}
           </Link>
         </h3>
@@ -188,7 +191,7 @@ export const PostCard = ({
         />
 
         {isLong && (
-          <Link to={`/post/${_id}`} className="inline-block py-2 -my-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700">
+          <Link to={postPath} className="inline-block py-2 -my-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700">
             Read the full post &rarr;
           </Link>
         )}
