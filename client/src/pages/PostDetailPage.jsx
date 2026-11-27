@@ -93,6 +93,13 @@ export const PostDetailPage = () => {
     };
   }, [post]);
 
+  // Redirect to the post's slug if it exists and is different from the current ID
+  useEffect(() => {
+    if (post?.slug && id !== post.slug) {
+      navigate(`/post/${post.slug}`, { replace: true });
+    }
+  }, [post?.slug, id, navigate]);
+
   const updatePost = (changes) => setResult((previous) => ({ ...previous, post: { ...previous.post, ...changes } }));
 
   const handleOpen = async () => {
