@@ -20,6 +20,19 @@ const router = express.Router();
 
 const escapeRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const createSlug = (title) => {
+  const base = String(title || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+  const shortId = Math.random().toString(36).substring(2, 6);
+  return base ? `${base}-${shortId}` : `post-${shortId}`;
+};
+
 const SORT_OPTIONS = ['newest', 'loved', 'viewed'];
 const AUTHOR_FIELDS = 'fullName username college department badges avatarColor avatarUrl bio';
 // Exclude internal arrays and admin notes in DB queries; externalLink/unmaskedLink are stripped in toPublicPost after computing previewUrl
@@ -180,6 +193,7 @@ router.post(
 
       const newPost = await Post.create({
         ...values,
+        slug: createSlug(values.title),
         author: author._id,
         externalLink: originalLink,
         unmaskedLink,
@@ -330,11 +344,11 @@ router.get('/feed', optionalFirebaseToken, async (req, res) => {
   }
 });
 
-// 3. One post in full (GET /api/posts/:id). Approved posts are public.
-// The author (and staff) can also open their own pending/declined posts. Only the author receives the link.
+// 3. One post in full (GET /api/posts/:id). Supports both MongoDB _id and slug.
+// Approved posts are public. The author (and staff) can also open their own pending/declined posts.
 router.get('/:id', optionalFirebaseToken, async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id!' });
+  const query = mongoose.isValidObjectId(id) ? { _id: id } : { slug: id };
 
   try {
     const [viewer, catalog] = await Promise.all([
@@ -345,7 +359,7 @@ router.get('/:id', optionalFirebaseToken, async (req, res) => {
     ]);
     const viewerId = viewer?._id.toString() || null;
 
-    const post = await Post.findById(id).select('-viewedBy').populate('author', AUTHOR_FIELDS).lean();
+    const post = await Post.findOne(query).select('-viewedBy').populate('author', AUTHOR_FIELDS).lean();
     if (!post) return res.status(404).json({ message: 'Post not found!' });
 
     const isOwner = Boolean(viewerId) && post.author?._id.toString() === viewerId;
